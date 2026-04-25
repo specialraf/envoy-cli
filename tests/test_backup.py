@@ -50,6 +50,19 @@ def test_backup_no_projects_raises(store, tmp_path):
         backup_all(PASSWORD, tmp_path / "bk")
 
 
+def test_backup_creates_dest_directory_if_missing(store, tmp_path):
+    """backup_all should create the destination directory when it doesn't exist."""
+    save_env("alpha", {"KEY": "val"}, PASSWORD)
+
+    dest = tmp_path / "nested" / "backups"
+    assert not dest.exists()
+
+    archive = backup_all(PASSWORD, dest)
+
+    assert dest.exists()
+    assert archive.exists()
+
+
 def test_restore_all_loads_projects(store, tmp_path):
     save_env("gamma", {"X": "10"}, PASSWORD)
     archive = backup_all(PASSWORD, tmp_path / "bk")
