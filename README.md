@@ -18,6 +18,13 @@ pipx install envoy-cli
 
 ---
 
+## Requirements
+
+- Python 3.8+
+- An S3-compatible, GCS, or Azure Blob Storage bucket
+
+---
+
 ## Usage
 
 ```bash
@@ -49,6 +56,9 @@ Envoy uses AES-256 encryption before transmitting any secrets. Credentials are s
 provider = "s3"          # s3 | gcs | azure
 bucket   = "my-secrets"
 region   = "us-east-1"
+
+[auth]
+encryption_key_file = "~/.envoy/key"  # path to your local AES key file
 ```
 
 ---
