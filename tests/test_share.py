@@ -84,3 +84,14 @@ def test_each_token_is_unique(store):
     t1 = create_share("myproject", "pass")
     t2 = create_share("myproject", "pass")
     assert t1 != t2
+
+
+def test_list_shares_includes_metadata(store):
+    """Each share entry should expose token, project, and expiry metadata."""
+    token = create_share("myproject", "pass", ttl=3600)
+    shares = list_shares()
+    match = next((s for s in shares if s["token"] == token), None)
+    assert match is not None, "Created token not found in list_shares output"
+    assert match["project"] == "myproject"
+    assert "expires_at" in match
+    assert match["expires_at"] > time.time()
