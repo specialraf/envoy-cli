@@ -1,104 +1,90 @@
-"""CLI entry-point for envoy."""
-
-from __future__ import annotations
-
-import getpass
-import sys
+"""Main CLI entry point for envoy."""
 
 import click
 
-from envoy import storage, sync
+from envoy.storage import save_env, load_env, list_projects, delete_project
+from envoy.cli_config import config_cmd
+from envoy.cli_diff import diff_cmd
+from envoy.cli_rotate import rotate_cmd
+from envoy.cli_export import export_cmd
+from envoy.cli_backup import backup_cmd
+from envoy.cli_share import share_cmd
 
 
 def _prompt_password(confirm: bool = False) -> str:
-    password = getpass.getpass("Password: ")
-    if confirm:
-        second = getpass.getpass("Confirm password: ")
-        if password != second:
-            click.echo("Passwords do not match.", err=True)
-            sys.exit(1)
-    return password
+    """Prompt the user for a master password."""
+    return click.prompt(
+        "Master password",
+        hide_input=True,
+        confirmation_prompt=confirm,
+    )
 
 
 @click.group()
-def cli() -> None:
-    """envoy — manage and sync encrypted .env files."""
+def cli():
+    """envoy — manage and sync .env files with encrypted storage."""
 
 
 @cli.command("set")
 @click.argument("project")
-@click.argument("env_file", type=click.Path(exists=True))
-def set_cmd(project: str, env_file: str) -> None:
-    """Store ENV_FILE contents under PROJECT."""
-    password = _prompt_password(confirm=True)
-    with open(env_file) as fh:
-        content = fh.read()
-    storage.save_env(project, content, password)
-    click.echo(f"Saved '{project}'.")
+@click.argument("key")
+@click.argument("value")
+def set_cmd(project: str, key: str, value: str):
+    """Set KEY=VALUE in PROJECT's env store."""
+    password = _prompt_password(confirm=False)
+    try:
+        env = load_env(project, password)
+    except KeyError:
+        env = {}
+    env[key] = value
+    save_env(project, env, password)
+    click.echo(f"Set {key} in {project}.")
 
 
 @cli.command("get")
 @click.argument("project")
-@click.option("--output", "-o", default="-", help="Output file (default: stdout)")
-def get_cmd(project: str, output: str) -> None:
-    """Retrieve and decrypt env vars for PROJECT."""
-    password = _prompt_password()
+@click.argument("key")
+def get_cmd(project: str, key: str):
+    """Get the value of KEY from PROJECT's env store."""
+    password = _prompt_password(confirm=False)
     try:
-        content = storage.load_env(project, password)
-    except KeyError as exc:
-        click.echo(str(exc), err=True)
-        sys.exit(1)
-    except ValueError as exc:
-        click.echo(f"Decryption error: {exc}", err=True)
-        sys.exit(1)
-    if output == "-":
-        click.echo(content, nl=False)
-    else:
-        with open(output, "w") as fh:
-            fh.write(content)
-        click.echo(f"Written to {output}")
+        env = load_env(project, password)
+    except KeyError:
+        raise click.ClickException(f"Project '{project}' not found.")
+    if key not in env:
+        raise click.ClickException(f"Key '{key}' not found in project '{project}'.")
+    click.echo(env[key])
 
 
 @cli.command("list")
-def list_cmd() -> None:
-    """List stored projects."""
-    projects = storage.list_projects()
+def list_cmd():
+    """List all stored projects."""
+    projects = list_projects()
     if not projects:
-        click.echo("No projects stored.")
-    else:
-        for p in sorted(projects):
-            click.echo(p)
+        click.echo("No projects found.")
+        return
+    for p in projects:
+        click.echo(p)
 
 
-@cli.command("push")
+@cli.command("delete")
 @click.argument("project")
-def push_cmd(project: str) -> None:
-    """Push encrypted env blob for PROJECT to remote store."""
-    password = _prompt_password()
+@click.confirmation_option(prompt="Are you sure you want to delete this project?")
+def delete_cmd(project: str):
+    """Delete a project from the env store."""
     try:
-        blob = storage.load_raw(project)
-    except KeyError as exc:
-        click.echo(str(exc), err=True)
-        sys.exit(1)
-    try:
-        sync.push(project, blob)
-    except (RuntimeError, EnvironmentError) as exc:
-        click.echo(str(exc), err=True)
-        sys.exit(1)
-    click.echo(f"Pushed '{project}' to remote.")
+        delete_project(project)
+    except KeyError:
+        raise click.ClickException(f"Project '{project}' not found.")
+    click.echo(f"Deleted project '{project}'.")
 
 
-@cli.command("pull")
-@click.argument("project")
-def pull_cmd(project: str) -> None:
-    """Pull encrypted env blob for PROJECT from remote store."""
-    try:
-        blob = sync.pull(project)
-    except (KeyError, RuntimeError, EnvironmentError) as exc:
-        click.echo(str(exc), err=True)
-        sys.exit(1)
-    storage.save_raw(project, blob)
-    click.echo(f"Pulled '{project}' from remote.")
+cli.add_command(config_cmd, "config")
+cli.add_command(diff_cmd, "diff")
+cli.add_command(rotate_cmd, "rotate")
+cli.add_command(export_cmd, "export")
+cli.add_command(backup_cmd, "backup")
+cli.add_command(share_cmd, "share")
 
 
 if __name__ == "__main__":
