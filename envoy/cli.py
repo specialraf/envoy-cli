@@ -1,67 +1,74 @@
 """Main CLI entry point for envoy."""
 
+from __future__ import annotations
+
 import click
 
-from envoy.storage import save_env, load_env, list_projects, delete_project
+from envoy.storage import save_env, load_env, list_projects, delete_env
 from envoy.cli_config import config_cmd
 from envoy.cli_diff import diff_cmd
 from envoy.cli_rotate import rotate_cmd
 from envoy.cli_export import export_cmd
 from envoy.cli_backup import backup_cmd
 from envoy.cli_share import share_cmd
+from envoy.cli_template import template_cmd
 
 
 def _prompt_password(confirm: bool = False) -> str:
-    """Prompt the user for a master password."""
-    return click.prompt(
-        "Master password",
-        hide_input=True,
-        confirmation_prompt=confirm,
-    )
+    password = click.prompt("Password", hide_input=True)
+    if confirm:
+        click.prompt("Confirm password", hide_input=True, confirmation_prompt=True)
+    return password
 
 
 @click.group()
-def cli():
+def cli() -> None:
     """envoy — manage and sync .env files with encrypted storage."""
 
 
 @cli.command("set")
 @click.argument("project")
-@click.argument("key")
-@click.argument("value")
-def set_cmd(project: str, key: str, value: str):
-    """Set KEY=VALUE in PROJECT's env store."""
-    password = _prompt_password(confirm=False)
-    try:
-        env = load_env(project, password)
-    except KeyError:
-        env = {}
-    env[key] = value
-    save_env(project, env, password)
-    click.echo(f"Set {key} in {project}.")
+@click.argument("env_file", type=click.Path(exists=True))
+def set_cmd(project: str, env_file: str) -> None:
+    """Store an .env file for PROJECT."""
+    import pathlib
+
+    password = _prompt_password(confirm=True)
+    content = pathlib.Path(env_file).read_text()
+    save_env(project, content, password)
+    click.echo(f"Saved {project}")
 
 
 @cli.command("get")
 @click.argument("project")
-@click.argument("key")
-def get_cmd(project: str, key: str):
-    """Get the value of KEY from PROJECT's env store."""
-    password = _prompt_password(confirm=False)
+@click.option("-o", "--output", default=None, help="Write to file instead of stdout")
+def get_cmd(project: str, output: str | None) -> None:
+    """Retrieve the .env file for PROJECT."""
+    import pathlib
+
+    password = _prompt_password()
     try:
-        env = load_env(project, password)
+        content = load_env(project, password)
     except KeyError:
-        raise click.ClickException(f"Project '{project}' not found.")
-    if key not in env:
-        raise click.ClickException(f"Key '{key}' not found in project '{project}'.")
-    click.echo(env[key])
+        click.echo(f"Project {project!r} not found.", err=True)
+        raise SystemExit(1)
+    except ValueError:
+        click.echo("Wrong password or corrupted data.", err=True)
+        raise SystemExit(1)
+
+    if output:
+        pathlib.Path(output).write_text(content)
+        click.echo(f"Written to {output}")
+    else:
+        click.echo(content, nl=False)
 
 
 @cli.command("list")
-def list_cmd():
+def list_cmd() -> None:
     """List all stored projects."""
     projects = list_projects()
     if not projects:
-        click.echo("No projects found.")
+        click.echo("No projects stored.")
         return
     for p in projects:
         click.echo(p)
@@ -69,14 +76,14 @@ def list_cmd():
 
 @cli.command("delete")
 @click.argument("project")
-@click.confirmation_option(prompt="Are you sure you want to delete this project?")
-def delete_cmd(project: str):
-    """Delete a project from the env store."""
+def delete_cmd(project: str) -> None:
+    """Delete the stored .env for PROJECT."""
     try:
-        delete_project(project)
+        delete_env(project)
+        click.echo(f"Deleted {project}")
     except KeyError:
-        raise click.ClickException(f"Project '{project}' not found.")
-    click.echo(f"Deleted project '{project}'.")
+        click.echo(f"Project {project!r} not found.", err=True)
+        raise SystemExit(1)
 
 
 cli.add_command(config_cmd, "config")
@@ -85,7 +92,7 @@ cli.add_command(rotate_cmd, "rotate")
 cli.add_command(export_cmd, "export")
 cli.add_command(backup_cmd, "backup")
 cli.add_command(share_cmd, "share")
-
+cli.add_command(template_cmd, "template")
 
 if __name__ == "__main__":
     cli()
