@@ -57,6 +57,18 @@ def test_rotate_project_not_found(runner, store):
     assert "not found" in result.output
 
 
+def test_rotate_project_wrong_old_password(runner, store):
+    """Rotating with an incorrect old password should fail with an error."""
+    save_env("myapp", SAMPLE_ENV, OLD_PASS)
+    result = runner.invoke(
+        rotate_cmd,
+        ["project", "myapp"],
+        input=f"wrong-pass\n{NEW_PASS}\n{NEW_PASS}\n",
+    )
+    assert result.exit_code != 0
+    assert "Invalid password" in result.output or "decrypt" in result.output.lower()
+
+
 def test_rotate_all_success(runner, store):
     for name in ("a", "b"):
         save_env(name, SAMPLE_ENV, OLD_PASS)
