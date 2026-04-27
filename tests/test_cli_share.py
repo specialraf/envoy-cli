@@ -57,6 +57,15 @@ def test_redeem_invalid_token_fails(store, runner):
     assert result.exit_code != 0
 
 
+def test_redeem_revoked_token_fails(store, runner):
+    """Redeeming a token after it has been revoked should fail."""
+    from envoy.share import create_share
+    token = create_share("proj", "secret")
+    runner.invoke(share_cmd, ["revoke", token])
+    result = runner.invoke(share_cmd, ["redeem", token])
+    assert result.exit_code != 0
+
+
 def test_revoke_success(store, runner):
     from envoy.share import create_share
     token = create_share("proj", "secret")
