@@ -73,6 +73,12 @@ def test_run_hook_captures_failure():
     assert not result.ok
 
 
+def test_run_hook_unknown_raises():
+    """run_hook should reject unknown hook names, consistent with get/set/clear."""
+    with pytest.raises(ValueError, match="Unknown hook"):
+        run_hook("on_explode")
+
+
 def test_list_hooks_returns_all_keys():
     hooks = list_hooks()
     hook_names = {h["hook"] for h in hooks}
