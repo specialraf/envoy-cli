@@ -31,25 +31,28 @@ class HookResult:
         return self.returncode == 0
 
 
-def get_hook(name: str) -> Optional[str]:
-    """Return the shell command registered for *name*, or None."""
+def _validate_hook_name(name: str) -> None:
+    """Raise ValueError if *name* is not a recognised hook key."""
     if name not in HOOK_KEYS:
         raise ValueError(f"Unknown hook '{name}'. Valid hooks: {sorted(HOOK_KEYS)}")
+
+
+def get_hook(name: str) -> Optional[str]:
+    """Return the shell command registered for *name*, or None."""
+    _validate_hook_name(name)
     value = get_value(f"hook_{name}")
     return value if value else None
 
 
 def set_hook(name: str, command: str) -> None:
     """Register *command* as the shell command for hook *name*."""
-    if name not in HOOK_KEYS:
-        raise ValueError(f"Unknown hook '{name}'. Valid hooks: {sorted(HOOK_KEYS)}")
+    _validate_hook_name(name)
     set_value(f"hook_{name}", command)
 
 
 def clear_hook(name: str) -> None:
     """Remove the registered command for hook *name*."""
-    if name not in HOOK_KEYS:
-        raise ValueError(f"Unknown hook '{name}'. Valid hooks: {sorted(HOOK_KEYS)}")
+    _validate_hook_name(name)
     set_value(f"hook_{name}", "")
 
 
